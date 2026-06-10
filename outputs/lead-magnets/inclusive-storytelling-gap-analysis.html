@@ -1,0 +1,594 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Inclusive Storytelling Accessibility Gap Analysis — Inclusive Tech Club</title>
+  <meta name="description" content="A gap analysis framework mapping where legacy accessibility approaches fall short in storytelling, and what to shift. Built by Inclusive Tech Club.">
+  <style>
+    /* ── Reset & base ─────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --navy:        #0f2044;
+      --navy-light:  #1a3461;
+      --white:       #ffffff;
+      --off-white:   #f8f9fc;
+      --text:        #111827;
+      --text-muted:  #4b5563;
+      --gap-bg:      #fef2f2;
+      --gap-border:  #fecaca;
+      --impact-bg:   #fffbeb;
+      --impact-border: #fde68a;
+      --shift-bg:    #f0fdf4;
+      --shift-border: #bbf7d0;
+      --high-bg:     #166534;   /* 7.1:1 vs white */
+      --high-text:   #ffffff;
+      --medhigh-bg:  #92400e;   /* 6.5:1 vs white */
+      --medhigh-text: #ffffff;
+      --accent:      #1d4ed8;
+      --focus:       #2563eb;
+    }
+
+    html { font-size: 18px; }
+
+    body {
+      font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+      background: var(--off-white);
+      color: var(--text);
+      line-height: 1.6;
+      padding: 2rem 1rem 4rem;
+    }
+
+    /* ── Skip navigation ──────────────────────────────────── */
+    .skip-link {
+      position: absolute;
+      top: -100%;
+      left: 1rem;
+      background: var(--navy);
+      color: var(--white);
+      padding: 0.5rem 1rem;
+      border-radius: 0 0 4px 4px;
+      font-weight: 600;
+      text-decoration: none;
+      z-index: 100;
+    }
+    .skip-link:focus { top: 0; }
+
+    /* ── Focus indicators ─────────────────────────────────── */
+    :focus-visible {
+      outline: 3px solid var(--focus);
+      outline-offset: 2px;
+      border-radius: 2px;
+    }
+
+    /* ── Layout ───────────────────────────────────────────── */
+    .page {
+      max-width: 960px;
+      margin: 0 auto;
+    }
+
+    /* ── Header ───────────────────────────────────────────── */
+    .header {
+      background: var(--navy);
+      color: var(--white);
+      padding: 2.5rem 2rem;
+      border-radius: 8px 8px 0 0;
+    }
+
+    .header__eyebrow {
+      font-size: 0.78rem;
+      font-weight: 600;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: #93c5fd;
+      margin-bottom: 0.75rem;
+    }
+
+    h1 {
+      font-size: clamp(1.5rem, 3vw, 2.25rem);
+      font-weight: 800;
+      line-height: 1.2;
+      margin-bottom: 0.5rem;
+    }
+
+    .header__subtitle {
+      font-size: 1rem;
+      color: #cbd5e1;
+      margin-bottom: 1.5rem;
+    }
+
+    .header__thesis {
+      background: rgba(255,255,255,0.08);
+      border-left: 4px solid #60a5fa;
+      padding: 0.875rem 1rem;
+      border-radius: 0 4px 4px 0;
+      font-size: 0.95rem;
+      color: #e2e8f0;
+    }
+
+    /* ── Main content ─────────────────────────────────────── */
+    .content {
+      background: var(--white);
+      padding: 2rem;
+      border-radius: 0 0 8px 8px;
+      border: 1px solid #e5e7eb;
+      border-top: none;
+    }
+
+    /* ── Section headings ─────────────────────────────────── */
+    h2 {
+      font-size: 1.25rem;
+      font-weight: 700;
+      color: var(--navy);
+      margin: 2rem 0 1rem;
+      padding-bottom: 0.5rem;
+      border-bottom: 2px solid #e5e7eb;
+    }
+
+    /* ── Gap analysis table ───────────────────────────────── */
+    .gap-table-wrapper {
+      overflow-x: auto;
+      margin: 0 -0.5rem;
+      padding: 0 0.5rem;
+    }
+
+    .gap-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.9rem;
+    }
+
+    .gap-table caption {
+      text-align: left;
+      font-size: 0.85rem;
+      color: var(--text-muted);
+      padding-bottom: 0.5rem;
+      caption-side: top;
+    }
+
+    /* Column headers */
+    .gap-table thead th {
+      background: var(--navy);
+      color: var(--white);
+      font-weight: 700;
+      font-size: 0.8rem;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      padding: 0.75rem 1rem;
+      text-align: left;
+    }
+
+    .gap-table thead th:first-child {
+      border-radius: 4px 0 0 0;
+      width: 120px;
+    }
+
+    .gap-table thead th:last-child {
+      border-radius: 0 4px 0 0;
+      width: 100px;
+      text-align: center;
+    }
+
+    /* Column header icons — decorative, aria-hidden */
+    .col-icon { margin-right: 0.4em; }
+
+    /* Row structure */
+    .gap-table tbody tr {
+      border-bottom: 1px solid #e5e7eb;
+    }
+
+    .gap-table tbody tr:last-child {
+      border-bottom: none;
+    }
+
+    /* Area cell (row header) */
+    .gap-table .area-cell {
+      background: var(--navy);
+      color: var(--white);
+      padding: 1rem;
+      vertical-align: top;
+      font-weight: 700;
+      font-size: 0.85rem;
+      line-height: 1.3;
+    }
+
+    .area-number {
+      display: block;
+      font-size: 1.5rem;
+      font-weight: 900;
+      line-height: 1;
+      margin-bottom: 0.25rem;
+      color: #60a5fa;
+    }
+
+    .area-name {
+      display: block;
+    }
+
+    /* Content cells */
+    .gap-cell    { background: var(--gap-bg);    border-left: 3px solid var(--gap-border);    padding: 1rem; vertical-align: top; }
+    .impact-cell { background: var(--impact-bg); border-left: 3px solid var(--impact-border); padding: 1rem; vertical-align: top; }
+    .shift-cell  { background: var(--shift-bg);  border-left: 3px solid var(--shift-border);  padding: 1rem; vertical-align: top; }
+
+    .cell-label {
+      display: block;
+      font-size: 0.7rem;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      margin-bottom: 0.35rem;
+    }
+
+    .cell-content {
+      font-size: 0.9rem;
+      line-height: 1.5;
+      color: var(--text);
+    }
+
+    /* Priority cell */
+    .priority-cell {
+      padding: 1rem 0.75rem;
+      text-align: center;
+      vertical-align: top;
+      background: #fafafa;
+    }
+
+    .priority-badge {
+      display: inline-block;
+      padding: 0.3em 0.65em;
+      border-radius: 4px;
+      font-size: 0.75rem;
+      font-weight: 700;
+      letter-spacing: 0.03em;
+    }
+
+    .priority-badge--high {
+      background: var(--high-bg);
+      color: var(--high-text);
+    }
+
+    .priority-badge--medium-high {
+      background: var(--medhigh-bg);
+      color: var(--medhigh-text);
+    }
+
+    /* ── Signals of maturity ──────────────────────────────── */
+    .maturity-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 1rem;
+      margin-top: 1rem;
+    }
+
+    .maturity-item {
+      background: var(--navy);
+      color: var(--white);
+      border-radius: 6px;
+      padding: 1rem;
+    }
+
+    .maturity-item__icon {
+      font-size: 1.25rem;
+      margin-bottom: 0.5rem;
+      display: block;
+    }
+
+    .maturity-item__text {
+      font-size: 0.875rem;
+      line-height: 1.4;
+    }
+
+    /* ── Pull quote ───────────────────────────────────────── */
+    .pull-quote {
+      margin: 2.5rem 0 0;
+      background: var(--navy);
+      color: var(--white);
+      border-radius: 8px;
+      padding: 2.5rem 2rem;
+      text-align: center;
+    }
+
+    .pull-quote blockquote {
+      font-size: clamp(1.1rem, 2.5vw, 1.5rem);
+      font-weight: 700;
+      line-height: 1.4;
+      max-width: 720px;
+      margin: 0 auto;
+    }
+
+    .pull-quote blockquote em {
+      color: #60a5fa;
+      font-style: normal;
+    }
+
+    .pull-quote cite {
+      display: block;
+      margin-top: 1rem;
+      font-size: 0.8rem;
+      font-style: normal;
+      color: #94a3b8;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+    }
+
+    /* ── Footer ───────────────────────────────────────────── */
+    .footer {
+      margin-top: 2rem;
+      text-align: center;
+      font-size: 0.8rem;
+      color: var(--text-muted);
+    }
+
+    .footer a {
+      color: var(--accent);
+    }
+
+    /* ── Print styles ─────────────────────────────────────── */
+    @media print {
+      body { background: white; padding: 0; font-size: 11pt; }
+      .header { border-radius: 0; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+      .skip-link { display: none; }
+      .pull-quote { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+      .maturity-item { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+      .gap-table thead th { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+      .area-cell { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    }
+
+    /* ── Reduced motion ───────────────────────────────────── */
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { transition: none !important; animation: none !important; }
+    }
+
+    /* ── Responsive ───────────────────────────────────────── */
+    @media (max-width: 640px) {
+      html { font-size: 16px; }
+      .content { padding: 1.25rem; }
+      .header { padding: 1.5rem 1.25rem; }
+
+      /* Stack table into cards on mobile */
+      .gap-table, .gap-table thead, .gap-table tbody,
+      .gap-table th, .gap-table td, .gap-table tr {
+        display: block;
+      }
+
+      .gap-table thead {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        overflow: hidden;
+        clip: rect(0,0,0,0);
+        white-space: nowrap;
+      }
+
+      .gap-table tbody tr {
+        background: white;
+        border: 1px solid #e5e7eb;
+        border-radius: 6px;
+        margin-bottom: 1rem;
+        overflow: hidden;
+      }
+
+      .gap-table .area-cell {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        padding: 0.75rem 1rem;
+      }
+
+      .area-number {
+        font-size: 1.25rem;
+        margin-bottom: 0;
+      }
+
+      .gap-cell, .impact-cell, .shift-cell, .priority-cell {
+        border-left: none;
+        border-top: 1px solid #e5e7eb;
+      }
+
+      .priority-cell { text-align: left; }
+    }
+  </style>
+</head>
+<body>
+  <a href="#main-content" class="skip-link">Skip to main content</a>
+
+  <div class="page">
+
+    <header class="header" role="banner">
+      <p class="header__eyebrow">Inclusive Tech Club — Gap Analysis Artifact</p>
+      <h1>Inclusive Storytelling Accessibility Gap Analysis</h1>
+      <p class="header__subtitle">Where legacy accessibility approaches fall short — and what to do next</p>
+      <p class="header__thesis">
+        Gap analysis helps move teams from compliance add-ons to inclusive system design.
+      </p>
+    </header>
+
+    <main id="main-content" class="content">
+
+      <h2>The Five Gaps</h2>
+
+      <div class="gap-table-wrapper">
+        <table class="gap-table" aria-label="Inclusive storytelling accessibility gap analysis — five areas with current gaps, impacts, and recommended shifts">
+          <caption>
+            Five areas where legacy accessibility approaches break in inclusive storytelling, with the impact of each gap and the recommended shift.
+          </caption>
+          <thead>
+            <tr>
+              <th scope="col">Area</th>
+              <th scope="col">
+                <span class="col-icon" aria-hidden="true">✗</span>Current gap
+              </th>
+              <th scope="col">
+                <span class="col-icon" aria-hidden="true">!</span>Impact
+              </th>
+              <th scope="col">
+                <span class="col-icon" aria-hidden="true">→</span>Recommended shift
+              </th>
+              <th scope="col">Priority</th>
+            </tr>
+          </thead>
+          <tbody>
+
+            <tr>
+              <th scope="row" class="area-cell">
+                <span class="area-number" aria-hidden="true">1</span>
+                <span class="area-name">Entry points</span>
+              </th>
+              <td class="gap-cell">
+                <span class="cell-label">Gap</span>
+                <span class="cell-content">Access options are hidden or unavailable at the start</span>
+              </td>
+              <td class="impact-cell">
+                <span class="cell-label">Impact</span>
+                <span class="cell-content">Users face friction before they can engage</span>
+              </td>
+              <td class="shift-cell">
+                <span class="cell-label">Shift</span>
+                <span class="cell-content">Present modality choices early and clearly</span>
+              </td>
+              <td class="priority-cell">
+                <span class="priority-badge priority-badge--high">High</span>
+              </td>
+            </tr>
+
+            <tr>
+              <th scope="row" class="area-cell">
+                <span class="area-number" aria-hidden="true">2</span>
+                <span class="area-name">Content delivery</span>
+              </th>
+              <td class="gap-cell">
+                <span class="cell-label">Gap</span>
+                <span class="cell-content">Story is designed for one dominant mode, usually text or visuals</span>
+              </td>
+              <td class="impact-cell">
+                <span class="cell-label">Impact</span>
+                <span class="cell-content">Comprehension drops for users with different needs or contexts</span>
+              </td>
+              <td class="shift-cell">
+                <span class="cell-label">Shift</span>
+                <span class="cell-content">Plan text, audio, captions, and assistive pathways together</span>
+              </td>
+              <td class="priority-cell">
+                <span class="priority-badge priority-badge--high">High</span>
+              </td>
+            </tr>
+
+            <tr>
+              <th scope="row" class="area-cell">
+                <span class="area-number" aria-hidden="true">3</span>
+                <span class="area-name">Transitions across modes</span>
+              </th>
+              <td class="gap-cell">
+                <span class="cell-label">Gap</span>
+                <span class="cell-content">Switching formats causes loss of place, progress, or meaning</span>
+              </td>
+              <td class="impact-cell">
+                <span class="cell-label">Impact</span>
+                <span class="cell-content">Users must restart or reconstruct context</span>
+              </td>
+              <td class="shift-cell">
+                <span class="cell-label">Shift</span>
+                <span class="cell-content">Preserve continuity across modalities</span>
+              </td>
+              <td class="priority-cell">
+                <span class="priority-badge priority-badge--high">High</span>
+              </td>
+            </tr>
+
+            <tr>
+              <th scope="row" class="area-cell">
+                <span class="area-number" aria-hidden="true">4</span>
+                <span class="area-name">Testing and validation</span>
+              </th>
+              <td class="gap-cell">
+                <span class="cell-label">Gap</span>
+                <span class="cell-content">Teams rely on checklists or automated scans only</span>
+              </td>
+              <td class="impact-cell">
+                <span class="cell-label">Impact</span>
+                <span class="cell-content">Lived experience gaps remain invisible</span>
+              </td>
+              <td class="shift-cell">
+                <span class="cell-label">Shift</span>
+                <span class="cell-content">Test with disabled, neurodivergent, multilingual, and edge-case users</span>
+              </td>
+              <td class="priority-cell">
+                <span class="priority-badge priority-badge--high">High</span>
+              </td>
+            </tr>
+
+            <tr>
+              <th scope="row" class="area-cell">
+                <span class="area-number" aria-hidden="true">5</span>
+                <span class="area-name">Ownership and governance</span>
+              </th>
+              <td class="gap-cell">
+                <span class="cell-label">Gap</span>
+                <span class="cell-content">Accessibility is siloed or added late</span>
+              </td>
+              <td class="impact-cell">
+                <span class="cell-label">Impact</span>
+                <span class="cell-content">Inclusion becomes expensive cleanup and uneven quality</span>
+              </td>
+              <td class="shift-cell">
+                <span class="cell-label">Shift</span>
+                <span class="cell-content">Assign shared ownership across design, content, engineering, research, and leadership</span>
+              </td>
+              <td class="priority-cell">
+                <span class="priority-badge priority-badge--medium-high">Medium–High</span>
+              </td>
+            </tr>
+
+          </tbody>
+        </table>
+      </div>
+
+      <h2>Signals of Maturity</h2>
+      <p style="color: var(--text-muted); font-size: 0.9rem; margin-bottom: 1rem;">
+        Teams moving from compliance add-ons to inclusive system design show these patterns:
+      </p>
+
+      <ul class="maturity-grid" role="list">
+        <li class="maturity-item">
+          <span class="maturity-item__icon" aria-hidden="true">↑</span>
+          <span class="maturity-item__text">Accessibility decisions happen upstream</span>
+        </li>
+        <li class="maturity-item">
+          <span class="maturity-item__icon" aria-hidden="true">◎</span>
+          <span class="maturity-item__text">Teams measure comprehension, not just compliance</span>
+        </li>
+        <li class="maturity-item">
+          <span class="maturity-item__icon" aria-hidden="true">⇄</span>
+          <span class="maturity-item__text">Users can change modes without losing meaning</span>
+        </li>
+        <li class="maturity-item">
+          <span class="maturity-item__icon" aria-hidden="true">◈</span>
+          <span class="maturity-item__text">Inclusive design is shared across functions</span>
+        </li>
+      </ul>
+
+      <div class="pull-quote">
+        <blockquote>
+          "The goal is not just access to the story —<br>
+          it is <em>trustworthy meaning across forms</em>."
+        </blockquote>
+        <cite>Inclusive Tech Club — Gap Analysis Artifact — Inclusive Design Beyond Compliance</cite>
+      </div>
+
+    </main>
+
+    <footer class="footer">
+      <p>
+        Built by <strong>Inclusive Tech Club</strong> ·
+        <a href="https://inclusivetech.club">inclusivetech.club</a> ·
+        This document is screen-reader accessible and keyboard navigable.
+        <br>To request this content in another format, contact
+        <a href="mailto:jamaal.davis3@gmail.com">jamaal.davis3@gmail.com</a>
+      </p>
+    </footer>
+
+  </div>
+</body>
+</html>
