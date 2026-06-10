@@ -1,6 +1,6 @@
 # Inclusive Tech Club — Growth Content OS
 
-A TypeScript content operations system for planning, generating, reviewing, and organizing inclusive design content across LinkedIn, newsletters, carousels, short videos, lead magnets, and CRM nurture workflows.
+A TypeScript content operations system for planning, generating, reviewing, and publishing inclusive design content across LinkedIn, newsletters, carousels, short videos, lead magnets, and CRM nurture workflows — automated end-to-end via n8n, Canva, and HeyGen.
 
 **Core principle:** The system generates drafts. Jamaal approves. No content is ever marked published without explicit human sign-off.
 
@@ -9,13 +9,15 @@ A TypeScript content operations system for planning, generating, reviewing, and 
 ## What it does
 
 - Classifies raw ideas against 5 content pillars, 6 funnel stages, 7 audience segments, and 7 value categories
-- Generates structured content briefs, then scaffolds (not final copy) for each format
+- Generates structured content briefs, then drafts LinkedIn copy, carousel outlines (with alt text), and video scripts
 - Runs every draft through a voice checker (51 banned phrases, weak hooks, vague claims) and an inclusion reviewer (shallow language, power gaps, harmful framing)
+- Produces finished branded carousel slides via **Canva MCP**
+- Produces AI avatar videos (Jamaal's face and voice) via **HeyGen MCP**
+- Packages all outputs and fires an **n8n** webhook to Jamaal's email for review
+- Posts to LinkedIn automatically when Jamaal clicks approve — and only then
 - Maps existing assets to repurposing opportunities with effort estimates
 - Manages a content calendar with an approval workflow
 - Exports structured rows for CRM nurture sequences
-
-Everything is rule-based and local — no external APIs, no LLM calls.
 
 ---
 
@@ -23,10 +25,13 @@ Everything is rule-based and local — no external APIs, no LLM calls.
 
 - **Language:** TypeScript 5.4, strict mode, ES2022
 - **Runtime:** Node.js with ESM
-- **Build:** `tsc`
-- **Test:** Vitest with v8 coverage
+- **Test:** Vitest (102 tests)
 - **Lint:** ESLint with TypeScript support
 - **Scripts:** `tsx` for direct TypeScript execution
+- **Automation:** n8n Cloud (2 importable workflows)
+- **Design:** Canva MCP
+- **Video:** HeyGen MCP (avatar + voice clone)
+- **Content DB:** Notion (ITC Content Ideas database)
 
 ---
 
@@ -64,32 +69,105 @@ Everything is rule-based and local — no external APIs, no LLM calls.
 │   ├── templates/              # Markdown templates per format
 │   └── __tests__/              # Vitest test suite (102 tests)
 │
-├── scripts/
-│   ├── cli.ts                  # Main CLI entry point
-│   ├── demo.ts                 # Full pipeline demo
-│   └── demo-framework.ts       # Framework generation demo
+├── .claude/
+│   ├── agents/                 # Agent instruction files
+│   │   ├── strategy-agent.md
+│   │   ├── content-agent.md
+│   │   ├── inclusion-review-agent.md
+│   │   ├── growth-agent.md
+│   │   ├── governance-agent.md
+│   │   ├── design-agent.md     # Canva MCP — carousel slides
+│   │   ├── video-agent.md      # HeyGen MCP — avatar video
+│   │   └── delivery-agent.md   # Packages outputs + fires n8n webhook
+│   └── skills/                 # Skill instruction files
 │
+├── n8n/
+│   ├── produce-workflow.json   # Full pipeline: Notion idea → approval email
+│   ├── publish-workflow.json   # Approval handler: approve/revise/block → LinkedIn
+│   └── setup-guide.md          # Step-by-step n8n Cloud configuration
+│
+├── .env.example                # Required environment variables (no real values)
 ├── inputs/                     # Drop zone for content assets (not committed)
 └── outputs/                    # Generated content (not committed)
 ```
 
 ---
 
-## Setup
+## Content pipeline
 
-```bash
-npm install
-npm run build      # compile to dist/
-npm run typecheck  # type check without emitting
-npm test           # run all 102 tests
-npm run test:coverage
 ```
+Notion — add idea with Status: Ready
+  ↓
+n8n produce-workflow fires (Mon/Wed/Fri 8am or manual)
+  ↓
+strategy-agent    → content brief: pillar, funnel, audience, value categories
+  ↓ [GATE: Jamaal approves angle via email]
+content-agent     → LinkedIn copy + 7-slide carousel outline + 60s video script
+                    runs voice check before handing off
+  ↓
+inclusion-review-agent → pass / revise / block
+  ↓ [BLOCK stops pipeline, Jamaal notified]
+growth-agent      → CTA, calendar slot, CRM segment, repurpose options
+  ↓
+governance-agent  → final pipeline verification, sets status: reviewed
+  ↓
+design-agent ─────→ Canva MCP: branded carousel slides (parallel)
+video-agent ──────→ HeyGen MCP: Jamaal avatar video   (parallel)
+  ↓
+delivery-agent    → packages all outputs, fires n8n webhook
+  ↓
+Jamaal receives approval email with copy, carousel, video, and quality checks
+  ↓ [GATE: Jamaal clicks Approve / Request Changes / Block]
+n8n publish-workflow → posts to LinkedIn, updates Notion to Published
+```
+
+Inclusion review `block` halts the pipeline. Nothing reaches Jamaal without passing voice check and inclusion review. Nothing posts without Jamaal's explicit approval click.
+
+---
+
+## Agent team
+
+| Agent | Stage | Tools |
+|---|---|---|
+| `strategy-agent` | Brief + classification | Claude API |
+| `content-agent` | Draft copy + scripts | Claude API, voice checker |
+| `inclusion-review-agent` | Flag issues | Claude API |
+| `growth-agent` | CTA + calendar + CRM | Claude API |
+| `governance-agent` | Final pipeline check | Claude API |
+| `design-agent` | Carousel slides | Canva MCP |
+| `video-agent` | Avatar video | HeyGen MCP |
+| `delivery-agent` | Package + notify | n8n webhook |
+
+---
+
+## n8n Setup
+
+See [n8n/setup-guide.md](n8n/setup-guide.md) for full step-by-step instructions.
+
+**Quick summary:**
+1. Add credentials in n8n Cloud: Anthropic (Header Auth), Gmail (OAuth2), LinkedIn (OAuth2), Notion (API key)
+2. Set 7 environment variables (see `.env.example`)
+3. Import `n8n/publish-workflow.json` → activate → copy webhook URL
+4. Import `n8n/produce-workflow.json` → activate
+5. Add an idea to Notion with Status: `Ready` → manual test run
+
+**Required environment variables:**
+
+| Variable | Description |
+|---|---|
+| `ANTHROPIC_API_KEY` | Anthropic API key |
+| `NOTION_CONTENT_IDEAS_DB` | Notion content ideas database ID |
+| `JAMAAL_EMAIL` | Approval email recipient |
+| `LINKEDIN_PERSON_URN` | `urn:li:person:XXXXXXXX` |
+| `CONTENT_OS_PATH` | Absolute path to this directory |
+| `N8N_APPROVAL_WEBHOOK_URL` | From publish workflow webhook node |
+| `N8N_DELIVERY_WEBHOOK_URL` | From produce workflow webhook node |
 
 ---
 
 ## CLI usage
 
-All services are accessible via `scripts/cli.ts`:
+All services are accessible via `scripts/cli.ts` for local runs outside n8n:
 
 ```bash
 # Generate a structured brief from a raw idea
@@ -107,30 +185,13 @@ npx tsx scripts/cli.ts inclusion "<draft text>"   # exit 0 = pass, 1 = revise, 2
 
 # Map repurposing opportunities for an existing asset
 npx tsx scripts/cli.ts repurpose "<title>" "<type>" "<pillar>" "<funnel>" "<audience>"
-# type: research_note | transcript | linkedin_post | newsletter | messy_notes | workshop_idea | article
 
 # Calendar
 npx tsx scripts/cli.ts calendar add "<date>" "<title>" "<channel>" "<pillar>" "<funnel>" "<cta>"
 npx tsx scripts/cli.ts calendar export [json|markdown]
 ```
 
-Exit codes are meaningful — agent workflows check `$?` to decide whether to proceed, revise, or halt.
-
----
-
-## Content pipeline
-
-```
-INPUT
-  → strategy-agent    (brief: pillar, funnel, audience, value categories)
-  → content-agent     (draft scaffold for target format)
-  → inclusion-review-agent  (flags power gaps, shallow language, harmful framing)
-  → growth-agent      (CTA, calendar entry, repurpose map)
-  → governance-agent  (status: reviewed)
-  → JAMAAL            (only person who marks approved / published)
-```
-
-Inclusion review `block` status halts the pipeline. `revise` returns the draft with specific flags. Nothing proceeds to calendar without clearing both voice and inclusion checks.
+Exit codes carry workflow logic — `0 / 1 / 2` map to proceed / revise / block.
 
 ---
 
@@ -161,13 +222,11 @@ Inclusion review `block` status halts the pipeline. `revise` returns the draft w
 | `inclusion-reviewer` | Pass / revise / block with per-category flags and recommended edits |
 | `linkedin-post-generator` | Bracketed scaffold for short, medium, or carousel intro post |
 | `newsletter-generator` | Sectioned newsletter structure with hook, body, CTA |
-| `carousel-generator` | Slide-by-slide outline for 5, 7, or 10 slides |
-| `video-script-generator` | Timed script for 30, 60, or 90 seconds |
+| `carousel-generator` | Slide-by-slide outline for 5, 7, or 10 slides with alt text |
+| `video-script-generator` | Timed script for 30, 60, or 90 seconds with caption guidance |
 | `repurposing-engine` | Ranked repurpose map with effort estimates and adaptation notes |
 | `content-calendar` | In-memory calendar with status tracking; exports JSON or Markdown |
 | `crm-exporter` | Structured rows for CRM nurture sequences |
-
-Generators produce scaffolds with `[BRACKETED PROMPTS]` — they structure the work, not replace it.
 
 ---
 
@@ -181,12 +240,13 @@ Only `approved` and `published` can be set by Jamaal. The system enforces this a
 
 ## Architecture notes
 
-- **No external APIs** — all classification is keyword and regex-based
 - **Scaffolds, not generated prose** — brackets show what to write, not what it says
 - **Pillar-first** — pillar assignment determines everything downstream (audience, funnel, formats, CTA)
 - **Inclusion is flagged, not fixed** — the reviewer surfaces issues; Jamaal decides what to do
 - **Exit codes carry workflow logic** — `0 / 1 / 2` map to proceed / revise / block
-- **In-memory calendar** — no database; agents export to JSON or Markdown per session
+- **Two hard gates** — angle approval and final publish approval require Jamaal's explicit action
+- **Design and video are parallel** — Canva and HeyGen run simultaneously after governance passes
+- **Fallback-safe** — if Canva or HeyGen fails, delivery-agent includes the error and pipeline continues to Jamaal with a manual fallback note
 - **Context-first** — `_context/` files are the source of truth; agents read them before generating
 
 ---
@@ -194,17 +254,17 @@ Only `approved` and `published` can be set by Jamaal. The system enforces this a
 ## Development
 
 ```bash
-npm run test:watch     # vitest in watch mode
-npm run lint           # eslint src --ext .ts
-npm run demo           # full pipeline demo
-npm run demo:framework # framework generation demo
+npm install
+npm test           # run all 102 tests
+npm run test:watch # vitest in watch mode
+npm run lint       # eslint src --ext .ts
 ```
 
 ---
 
-## What this is not
+## Security
 
-- Not an AI writing tool — it generates structure, not prose
-- Not a publishing platform — it has no CMS integration or scheduler
-- Not multi-user — built for a single operator
-- Not persistent — calendar state lives in memory per session; export before closing
+- Never commit `.env` — all variants are gitignored (`.env`, `.env.*`, `*.env`)
+- Use `.env.example` as the reference for required variables — it contains no real values
+- n8n stores credentials encrypted; do not hardcode API keys in workflow nodes
+- Rotate tokens after sharing them in any chat or document
