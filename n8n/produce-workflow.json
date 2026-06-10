@@ -1,0 +1,490 @@
+{
+  "name": "ITC Content OS — Produce",
+  "nodes": [
+    {
+      "id": "trigger",
+      "name": "Trigger",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [0, 0],
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 8 * * 1,3,5"
+            }
+          ]
+        }
+      },
+      "notes": "Fires Mon/Wed/Fri at 8am. Change to Webhook node if you want on-demand triggering."
+    },
+    {
+      "id": "read-idea",
+      "name": "Read Idea from Notion",
+      "type": "n8n-nodes-base.notion",
+      "typeVersion": 2.2,
+      "position": [220, 0],
+      "parameters": {
+        "operation": "getAll",
+        "databaseId": "={{ $env.NOTION_CONTENT_IDEAS_DB }}",
+        "filterType": "manual",
+        "filters": {
+          "conditions": [
+            {
+              "key": "Status|select",
+              "condition": "select_equals",
+              "selectValue": "Ready"
+            }
+          ]
+        },
+        "limit": 1,
+        "sort": {
+          "key": "Priority|select",
+          "direction": "descending"
+        }
+      },
+      "notes": "Pulls the highest-priority idea from your Notion content ideas DB. Requires NOTION_CONTENT_IDEAS_DB env var."
+    },
+    {
+      "id": "strategy-agent",
+      "name": "Strategy Agent — Brief + Pillar",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [440, 0],
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.anthropic.com/v1/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "x-api-key", "value": "={{ $env.ANTHROPIC_API_KEY }}" },
+            { "name": "anthropic-version", "value": "2023-06-01" },
+            { "name": "content-type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "model",
+              "value": "claude-sonnet-4-6"
+            },
+            {
+              "name": "max_tokens",
+              "value": 2048
+            },
+            {
+              "name": "system",
+              "value": "You are the Strategy Agent for Inclusive Tech Club Growth Content OS. Read the agent instructions at .claude/agents/strategy-agent.md. Your job: classify the idea by content pillar and funnel stage, produce a content brief, and identify the core thesis and recommended formats. Output valid JSON only."
+            },
+            {
+              "name": "messages",
+              "value": "=[{ \"role\": \"user\", \"content\": \"Produce a content brief for this idea: {{ $json.properties.Idea.title[0].plain_text }}. Context: {{ $json.properties.Notes.rich_text[0].plain_text }}\" }]"
+            }
+          ]
+        }
+      },
+      "notes": "Calls Claude API with strategy-agent context. Returns JSON brief."
+    },
+    {
+      "id": "angle-approval-wait",
+      "name": "Wait — Jamaal Approves Angle",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [660, 0],
+      "parameters": {
+        "resume": "webhook",
+        "webhookSuffix": "angle-approval"
+      },
+      "notes": "Pipeline pauses here. Jamaal receives the brief via email/Notion and must hit the approval webhook to continue. This is a hard gate — no auto-advance."
+    },
+    {
+      "id": "notify-angle",
+      "name": "Email Jamaal — Angle for Approval",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [660, -180],
+      "parameters": {
+        "operation": "send",
+        "toList": "={{ $env.JAMAAL_EMAIL }}",
+        "subject": "ITC Content OS — Angle Approval Needed: {{ $('strategy-agent').item.json.content[0].text | parseJSON | .slug }}",
+        "emailType": "html",
+        "message": "<h2>New content brief ready for your angle approval</h2><p><strong>Pillar:</strong> {{ $('strategy-agent').item.json.content[0].text | parseJSON | .pillar }}</p><p><strong>Funnel stage:</strong> {{ $('strategy-agent').item.json.content[0].text | parseJSON | .funnel_stage }}</p><p><strong>Core thesis:</strong> {{ $('strategy-agent').item.json.content[0].text | parseJSON | .core_thesis }}</p><p><strong>Recommended formats:</strong> {{ $('strategy-agent').item.json.content[0].text | parseJSON | .recommended_formats }}</p><hr><p><a href='{{ $env.N8N_APPROVAL_WEBHOOK_URL }}/angle-approval?resume={{ $execution.resumeUrl }}'>Approve this angle →</a></p><p>If you want changes, reply to this email with your notes and the pipeline will not proceed until you re-approve.</p>"
+      }
+    },
+    {
+      "id": "content-agent",
+      "name": "Content Agent — Draft Copy + Scripts",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [880, 0],
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.anthropic.com/v1/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "x-api-key", "value": "={{ $env.ANTHROPIC_API_KEY }}" },
+            { "name": "anthropic-version", "value": "2023-06-01" },
+            { "name": "content-type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            { "name": "model", "value": "claude-sonnet-4-6" },
+            { "name": "max_tokens", "value": 4096 },
+            {
+              "name": "system",
+              "value": "You are the Content Agent for Inclusive Tech Club Growth Content OS. Follow .claude/agents/content-agent.md exactly. Produce: (1) LinkedIn post copy, (2) carousel outline with 7 slides including alt text, (3) 60-second video script. Run voice check rules from _context/voice-style-and-rules.md. Output valid JSON with keys: linkedin_post, carousel_outline, video_script, voice_check_score, voice_check_verdict."
+            },
+            {
+              "name": "messages",
+              "value": "=[{ \"role\": \"user\", \"content\": \"Draft content from this approved brief: {{ $('strategy-agent').item.json.content[0].text }}\" }]"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "inclusion-review-agent",
+      "name": "Inclusion Review Agent",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1100, 0],
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.anthropic.com/v1/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "x-api-key", "value": "={{ $env.ANTHROPIC_API_KEY }}" },
+            { "name": "anthropic-version", "value": "2023-06-01" },
+            { "name": "content-type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            { "name": "model", "value": "claude-sonnet-4-6" },
+            { "name": "max_tokens", "value": 2048 },
+            {
+              "name": "system",
+              "value": "You are the Inclusion Review Agent for Inclusive Tech Club Growth Content OS. Follow .claude/agents/inclusion-review-agent.md. Review all three assets for harmful framing, power dynamics gaps, and unsupported claims. Output valid JSON with keys: verdict (pass|revise|block), flags (array of strings), notes."
+            },
+            {
+              "name": "messages",
+              "value": "=[{ \"role\": \"user\", \"content\": \"Review these assets: {{ $('content-agent').item.json.content[0].text }}\" }]"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "check-block",
+      "name": "Block Check",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.1,
+      "position": [1320, 0],
+      "parameters": {
+        "conditions": {
+          "options": { "leftValue": "", "caseSensitive": true, "typeValidation": "strict" },
+          "conditions": [
+            {
+              "leftValue": "={{ $('inclusion-review-agent').item.json.content[0].text | parseJSON | .verdict }}",
+              "rightValue": "block",
+              "operator": { "type": "string", "operation": "notEquals" }
+            }
+          ],
+          "combinator": "and"
+        }
+      },
+      "notes": "If inclusion review returns block, the pipeline stops. Jamaal is notified but nothing proceeds."
+    },
+    {
+      "id": "notify-block",
+      "name": "Email Jamaal — Pipeline Blocked",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [1540, -180],
+      "parameters": {
+        "operation": "send",
+        "toList": "={{ $env.JAMAAL_EMAIL }}",
+        "subject": "ITC Content OS — Pipeline BLOCKED",
+        "emailType": "html",
+        "message": "<h2>Pipeline blocked by inclusion review</h2><p>Content was stopped before reaching you because inclusion review returned a BLOCK verdict.</p><p><strong>Reason:</strong> {{ $('inclusion-review-agent').item.json.content[0].text | parseJSON | .notes }}</p><p><strong>Flags:</strong> {{ $('inclusion-review-agent').item.json.content[0].text | parseJSON | .flags | join(', ') }}</p><p>To restart: fix the flagged issues in the original brief and re-trigger the pipeline.</p>"
+      }
+    },
+    {
+      "id": "growth-agent",
+      "name": "Growth Agent — CTA + Calendar",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1540, 0],
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.anthropic.com/v1/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "x-api-key", "value": "={{ $env.ANTHROPIC_API_KEY }}" },
+            { "name": "anthropic-version", "value": "2023-06-01" },
+            { "name": "content-type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            { "name": "model", "value": "claude-sonnet-4-6" },
+            { "name": "max_tokens", "value": 1024 },
+            {
+              "name": "system",
+              "value": "You are the Growth Agent for Inclusive Tech Club Growth Content OS. Follow .claude/agents/growth-agent.md. Set the CTA, assign a calendar slot (next available Mon/Wed/Fri), define the CRM segment, and list repurpose options. Output valid JSON with keys: cta, calendar_slot, crm_segment, repurpose_options."
+            },
+            {
+              "name": "messages",
+              "value": "=[{ \"role\": \"user\", \"content\": \"Set growth metadata for: {{ $('content-agent').item.json.content[0].text }}\" }]"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "governance-agent",
+      "name": "Governance Agent — Final Check",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1760, 0],
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.anthropic.com/v1/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "x-api-key", "value": "={{ $env.ANTHROPIC_API_KEY }}" },
+            { "name": "anthropic-version", "value": "2023-06-01" },
+            { "name": "content-type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            { "name": "model", "value": "claude-sonnet-4-6" },
+            { "name": "max_tokens", "value": 1024 },
+            {
+              "name": "system",
+              "value": "You are the Governance Agent for Inclusive Tech Club Growth Content OS. Follow .claude/agents/governance-agent.md. Verify the full pipeline ran: brief, voice check, inclusion review (pass), growth metadata. Output valid JSON with keys: status (reviewed|blocked), checklist (object of booleans), notes."
+            },
+            {
+              "name": "messages",
+              "value": "=[{ \"role\": \"user\", \"content\": \"Run final governance check. Brief: {{ $('strategy-agent').item.json.content[0].text }}. Voice: {{ $('content-agent').item.json.content[0].text | parseJSON | .voice_check_verdict }}. Inclusion: {{ $('inclusion-review-agent').item.json.content[0].text | parseJSON | .verdict }}. Growth: {{ $('growth-agent').item.json.content[0].text }}.\" }]"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "design-video-split",
+      "name": "Run Design + Video in Parallel",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [1980, 0],
+      "parameters": {
+        "batchSize": 1,
+        "options": {}
+      },
+      "notes": "Design-agent (Canva) and video-agent (HeyGen) run as parallel HTTP requests below."
+    },
+    {
+      "id": "design-agent",
+      "name": "Design Agent — Canva Carousel",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [2200, -120],
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.anthropic.com/v1/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "x-api-key", "value": "={{ $env.ANTHROPIC_API_KEY }}" },
+            { "name": "anthropic-version", "value": "2023-06-01" },
+            { "name": "content-type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            { "name": "model", "value": "claude-sonnet-4-6" },
+            { "name": "max_tokens", "value": 2048 },
+            {
+              "name": "system",
+              "value": "You are the Design Agent for Inclusive Tech Club Growth Content OS. Follow .claude/agents/design-agent.md. Use your Canva MCP tools to produce carousel slides from the outline. Return a JSON object with keys: canva_design_urls (array), export_urls (array), accessibility_verified (boolean), error (string or null)."
+            },
+            {
+              "name": "messages",
+              "value": "=[{ \"role\": \"user\", \"content\": \"Produce carousel slides from this outline: {{ $('content-agent').item.json.content[0].text | parseJSON | .carousel_outline }}\" }]"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "video-agent",
+      "name": "Video Agent — HeyGen Avatar Video",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [2200, 120],
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.anthropic.com/v1/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "x-api-key", "value": "={{ $env.ANTHROPIC_API_KEY }}" },
+            { "name": "anthropic-version", "value": "2023-06-01" },
+            { "name": "content-type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            { "name": "model", "value": "claude-sonnet-4-6" },
+            { "name": "max_tokens", "value": 2048 },
+            {
+              "name": "system",
+              "value": "You are the Video Agent for Inclusive Tech Club Growth Content OS. Follow .claude/agents/video-agent.md. Use your HeyGen MCP tools to produce an avatar video from the script. Return a JSON object with keys: heygen_video_id, video_url, captions_enabled (boolean), duration_seconds, error (string or null)."
+            },
+            {
+              "name": "messages",
+              "value": "=[{ \"role\": \"user\", \"content\": \"Produce a 60-second avatar video from this script: {{ $('content-agent').item.json.content[0].text | parseJSON | .video_script }}\" }]"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "delivery-agent",
+      "name": "Delivery Agent — Package + Fire Webhook",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [2420, 0],
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.anthropic.com/v1/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "x-api-key", "value": "={{ $env.ANTHROPIC_API_KEY }}" },
+            { "name": "anthropic-version", "value": "2023-06-01" },
+            { "name": "content-type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            { "name": "model", "value": "claude-sonnet-4-6" },
+            { "name": "max_tokens", "value": 2048 },
+            {
+              "name": "system",
+              "value": "You are the Delivery Agent for Inclusive Tech Club Growth Content OS. Follow .claude/agents/delivery-agent.md. Package all outputs and produce the structured approval bundle. Output valid JSON with keys: approval_bundle (full markdown string), slug, all_assets_ready (boolean), flags (array)."
+            },
+            {
+              "name": "messages",
+              "value": "=[{ \"role\": \"user\", \"content\": \"Package approval bundle. Copy: {{ $('content-agent').item.json.content[0].text | parseJSON | .linkedin_post }}. Carousel: {{ $('design-agent').item.json.content[0].text }}. Video: {{ $('video-agent').item.json.content[0].text }}. Growth: {{ $('growth-agent').item.json.content[0].text }}. Governance: {{ $('governance-agent').item.json.content[0].text }}.\" }]"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "notify-jamaal",
+      "name": "Email Jamaal — Approval Bundle",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [2640, 0],
+      "parameters": {
+        "operation": "send",
+        "toList": "={{ $env.JAMAAL_EMAIL }}",
+        "subject": "ITC Content OS — Ready for Your Review: {{ $('delivery-agent').item.json.content[0].text | parseJSON | .slug }}",
+        "emailType": "html",
+        "message": "<h2>Content bundle ready for your review</h2><p>The full pipeline ran. Everything below is a draft — only you can approve.</p><pre>{{ $('delivery-agent').item.json.content[0].text | parseJSON | .approval_bundle }}</pre><hr><p><a href='{{ $env.N8N_APPROVAL_WEBHOOK_URL }}?id={{ $('delivery-agent').item.json.content[0].text | parseJSON | .slug }}&action=approve'>Approve →</a>&nbsp;&nbsp;<a href='{{ $env.N8N_APPROVAL_WEBHOOK_URL }}?id={{ $('delivery-agent').item.json.content[0].text | parseJSON | .slug }}&action=revise'>Request Changes</a>&nbsp;&nbsp;<a href='{{ $env.N8N_APPROVAL_WEBHOOK_URL }}?id={{ $('delivery-agent').item.json.content[0].text | parseJSON | .slug }}&action=block'>Block</a></p>"
+      }
+    }
+  ],
+  "connections": {
+    "Trigger": { "main": [[{ "node": "Read Idea from Notion", "type": "main", "index": 0 }]] },
+    "Read Idea from Notion": { "main": [[{ "node": "Strategy Agent — Brief + Pillar", "type": "main", "index": 0 }]] },
+    "Strategy Agent — Brief + Pillar": {
+      "main": [
+        [
+          { "node": "Email Jamaal — Angle for Approval", "type": "main", "index": 0 },
+          { "node": "Wait — Jamaal Approves Angle", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Wait — Jamaal Approves Angle": { "main": [[{ "node": "Content Agent — Draft Copy + Scripts", "type": "main", "index": 0 }]] },
+    "Content Agent — Draft Copy + Scripts": { "main": [[{ "node": "Inclusion Review Agent", "type": "main", "index": 0 }]] },
+    "Inclusion Review Agent": { "main": [[{ "node": "Block Check", "type": "main", "index": 0 }]] },
+    "Block Check": {
+      "main": [
+        [{ "node": "Growth Agent — CTA + Calendar", "type": "main", "index": 0 }],
+        [{ "node": "Email Jamaal — Pipeline Blocked", "type": "main", "index": 0 }]
+      ]
+    },
+    "Growth Agent — CTA + Calendar": { "main": [[{ "node": "Governance Agent — Final Check", "type": "main", "index": 0 }]] },
+    "Governance Agent — Final Check": {
+      "main": [
+        [
+          { "node": "Design Agent — Canva Carousel", "type": "main", "index": 0 },
+          { "node": "Video Agent — HeyGen Avatar Video", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Design Agent — Canva Carousel": { "main": [[{ "node": "Delivery Agent — Package + Fire Webhook", "type": "main", "index": 0 }]] },
+    "Video Agent — HeyGen Avatar Video": { "main": [[{ "node": "Delivery Agent — Package + Fire Webhook", "type": "main", "index": 0 }]] },
+    "Delivery Agent — Package + Fire Webhook": { "main": [[{ "node": "Email Jamaal — Approval Bundle", "type": "main", "index": 0 }]] }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true,
+    "callerPolicy": "workflowsFromSameOwner",
+    "errorWorkflow": ""
+  },
+  "staticData": null,
+  "tags": ["ITC Content OS", "produce"],
+  "_meta": {
+    "instanceId": "itc-content-os",
+    "setup_notes": [
+      "Set these environment variables in n8n before activating:",
+      "ANTHROPIC_API_KEY — your Anthropic API key",
+      "NOTION_CONTENT_IDEAS_DB — Notion database ID for content ideas",
+      "JAMAAL_EMAIL — jamaal.davis3@gmail.com",
+      "N8N_APPROVAL_WEBHOOK_URL — URL of the publish workflow webhook",
+      "N8N_DELIVERY_WEBHOOK_URL — URL of this workflow's delivery endpoint",
+      "",
+      "Credentials to configure in n8n:",
+      "- Gmail OAuth2 (for approval emails)",
+      "- Notion API key (for idea intake)",
+      "- HTTP Header Auth (Anthropic API key)"
+    ]
+  }
+}

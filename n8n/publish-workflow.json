@@ -1,0 +1,223 @@
+{
+  "name": "ITC Content OS — Publish",
+  "nodes": [
+    {
+      "id": "approval-webhook",
+      "name": "Jamaal Approval Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [0, 0],
+      "parameters": {
+        "httpMethod": "GET",
+        "path": "itc-approval",
+        "responseMode": "lastNode",
+        "responseData": "allEntries"
+      },
+      "notes": "Receives Jamaal's approve / revise / block action from approval email links. Expects query params: id (slug), action (approve|revise|block)."
+    },
+    {
+      "id": "route-action",
+      "name": "Route by Action",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [220, 0],
+      "parameters": {
+        "mode": "rules",
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.query.action }}",
+                    "rightValue": "approve",
+                    "operator": { "type": "string", "operation": "equals" }
+                  }
+                ]
+              },
+              "renameOutput": true,
+              "outputKey": "approve"
+            },
+            {
+              "conditions": {
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.query.action }}",
+                    "rightValue": "revise",
+                    "operator": { "type": "string", "operation": "equals" }
+                  }
+                ]
+              },
+              "renameOutput": true,
+              "outputKey": "revise"
+            },
+            {
+              "conditions": {
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.query.action }}",
+                    "rightValue": "block",
+                    "operator": { "type": "string", "operation": "equals" }
+                  }
+                ]
+              },
+              "renameOutput": true,
+              "outputKey": "block"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "read-approved-content",
+      "name": "Read Approved Content Bundle",
+      "type": "n8n-nodes-base.readWriteFile",
+      "typeVersion": 1,
+      "position": [440, -120],
+      "parameters": {
+        "operation": "read",
+        "fileName": "={{ $env.CONTENT_OS_PATH }}/outputs/delivery/{{ $('Jamaal Approval Webhook').item.json.query.id }}-approval-*.md"
+      },
+      "notes": "Reads the delivery bundle that was packaged by delivery-agent. CONTENT_OS_PATH must point to the content OS root directory."
+    },
+    {
+      "id": "post-linkedin",
+      "name": "Post to LinkedIn",
+      "type": "n8n-nodes-base.linkedIn",
+      "typeVersion": 1,
+      "position": [660, -120],
+      "parameters": {
+        "person": "={{ $env.LINKEDIN_PERSON_URN }}",
+        "text": "={{ $('Read Approved Content Bundle').item.json.data.match(/## LinkedIn Post Copy\\n\\n([\\s\\S]*?)\\n\\n---/)[1] }}",
+        "shareMediaCategory": "NONE"
+      },
+      "notes": "Posts the LinkedIn copy. Configure LinkedIn OAuth2 credentials in n8n. LINKEDIN_PERSON_URN = urn:li:person:YOUR_ID"
+    },
+    {
+      "id": "update-notion-published",
+      "name": "Update Notion — Mark Published",
+      "type": "n8n-nodes-base.notion",
+      "typeVersion": 2.2,
+      "position": [880, -120],
+      "parameters": {
+        "operation": "update",
+        "databaseId": "={{ $env.NOTION_CONTENT_IDEAS_DB }}",
+        "pageId": "={{ $env.NOTION_CONTENT_IDEAS_DB }}",
+        "propertiesUi": {
+          "propertyValues": [
+            {
+              "key": "Status|select",
+              "selectValue": "Published"
+            },
+            {
+              "key": "Published Date|date",
+              "dateValue": "={{ $now.toISO() }}"
+            },
+            {
+              "key": "LinkedIn Post ID|rich_text",
+              "textValue": "={{ $('Post to LinkedIn').item.json.id }}"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "confirm-published",
+      "name": "Email Jamaal — Published Confirmation",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [1100, -120],
+      "parameters": {
+        "operation": "send",
+        "toList": "={{ $env.JAMAAL_EMAIL }}",
+        "subject": "ITC Content OS — Published: {{ $('Jamaal Approval Webhook').item.json.query.id }}",
+        "emailType": "html",
+        "message": "<h2>Your content is live.</h2><p><strong>Slug:</strong> {{ $('Jamaal Approval Webhook').item.json.query.id }}</p><p><strong>Published at:</strong> {{ $now.format('MMMM D, YYYY h:mm a') }}</p><p><a href='https://www.linkedin.com/feed/'>View on LinkedIn →</a></p><hr><p>Next content bundle will be ready by {{ $now.plus({ days: 2 }).format('EEEE, MMMM D') }}.</p>"
+      }
+    },
+    {
+      "id": "handle-revise",
+      "name": "Email Jamaal — Revise Acknowledgement",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [440, 0],
+      "parameters": {
+        "operation": "send",
+        "toList": "={{ $env.JAMAAL_EMAIL }}",
+        "subject": "ITC Content OS — Revision Requested: {{ $('Jamaal Approval Webhook').item.json.query.id }}",
+        "emailType": "html",
+        "message": "<h2>Revision request received.</h2><p>Content for <strong>{{ $('Jamaal Approval Webhook').item.json.query.id }}</strong> has been flagged for revision.</p><p>Reply to this email with your specific notes. Claude Code will pick up the revision on the next pipeline run, or trigger a manual re-run via the produce workflow webhook.</p><p>Status updated to: <strong>needs_revision</strong></p>"
+      }
+    },
+    {
+      "id": "handle-block",
+      "name": "Email Jamaal — Block Confirmation",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [440, 120],
+      "parameters": {
+        "operation": "send",
+        "toList": "={{ $env.JAMAAL_EMAIL }}",
+        "subject": "ITC Content OS — BLOCKED: {{ $('Jamaal Approval Webhook').item.json.query.id }}",
+        "emailType": "html",
+        "message": "<h2>Content blocked.</h2><p><strong>{{ $('Jamaal Approval Webhook').item.json.query.id }}</strong> has been blocked and will not be published.</p><p>This content will not re-enter the pipeline automatically. If you want to restart with a different angle, trigger a new produce run with updated brief notes.</p>"
+      }
+    },
+    {
+      "id": "webhook-response",
+      "name": "Webhook Response",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [1320, 0],
+      "parameters": {
+        "respondWith": "text",
+        "responseBody": "Action received. Check your email for confirmation."
+      }
+    }
+  ],
+  "connections": {
+    "Jamaal Approval Webhook": { "main": [[{ "node": "Route by Action", "type": "main", "index": 0 }]] },
+    "Route by Action": {
+      "main": [
+        [{ "node": "Read Approved Content Bundle", "type": "main", "index": 0 }],
+        [{ "node": "Email Jamaal — Revise Acknowledgement", "type": "main", "index": 0 }],
+        [{ "node": "Email Jamaal — Block Confirmation", "type": "main", "index": 0 }]
+      ]
+    },
+    "Read Approved Content Bundle": { "main": [[{ "node": "Post to LinkedIn", "type": "main", "index": 0 }]] },
+    "Post to LinkedIn": { "main": [[{ "node": "Update Notion — Mark Published", "type": "main", "index": 0 }]] },
+    "Update Notion — Mark Published": { "main": [[{ "node": "Email Jamaal — Published Confirmation", "type": "main", "index": 0 }]] },
+    "Email Jamaal — Published Confirmation": { "main": [[{ "node": "Webhook Response", "type": "main", "index": 0 }]] },
+    "Email Jamaal — Revise Acknowledgement": { "main": [[{ "node": "Webhook Response", "type": "main", "index": 0 }]] },
+    "Email Jamaal — Block Confirmation": { "main": [[{ "node": "Webhook Response", "type": "main", "index": 0 }]] }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true,
+    "callerPolicy": "workflowsFromSameOwner"
+  },
+  "staticData": null,
+  "tags": ["ITC Content OS", "publish"],
+  "_meta": {
+    "instanceId": "itc-content-os",
+    "setup_notes": [
+      "Set these environment variables in n8n before activating:",
+      "ANTHROPIC_API_KEY — your Anthropic API key",
+      "NOTION_CONTENT_IDEAS_DB — Notion database ID for content ideas",
+      "JAMAAL_EMAIL — jamaal.davis3@gmail.com",
+      "LINKEDIN_PERSON_URN — urn:li:person:YOUR_LINKEDIN_ID",
+      "CONTENT_OS_PATH — absolute path to the content OS root directory",
+      "N8N_APPROVAL_WEBHOOK_URL — the public URL of the approval webhook (this workflow's webhook URL)",
+      "",
+      "Credentials to configure in n8n:",
+      "- Gmail OAuth2",
+      "- LinkedIn OAuth2",
+      "- Notion API key",
+      "",
+      "IMPORTANT: This workflow handles the publish step.",
+      "Only Jamaal can trigger approve. No agent can.",
+      "The approval link in the produce workflow email points here."
+    ]
+  }
+}

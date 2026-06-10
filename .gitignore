@@ -1,11 +1,28 @@
 node_modules/
 dist/
 coverage/
+
+# Environment files — never commit real values
+.env
+.env.*
 *.env
-.env.local
+!.env.example
+
+# Outputs — generated content, not source
 outputs/**/*.json
 outputs/**/*.csv
 outputs/**/*.md
 !outputs/.gitkeep
+
+# Inputs — may contain private notes or images
 inputs/*
 !inputs/README.md
+
+# Secrets that might appear during n8n setup
+n8n/*.key
+n8n/*.secret
+
+# OS / editor noise
+.DS_Store
+Thumbs.db
+*.swp
