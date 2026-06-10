@@ -23,29 +23,52 @@ You own the front of the pipeline: understanding the input, classifying it, reco
    - `_context/content-pillars.md`
    - `_context/offer-map.md`
 
-3. **Run the content-brief skill.** Follow `.claude/skills/content-brief.md` exactly.
-   Call: `npx tsx scripts/cli.ts brief "<extracted content>"`
+3. **Extract content atoms.** Before running the brief, pull discrete atoms from the raw input. This sharpens the brief and surfaces angles you would miss going straight to classification.
 
-4. **Fill in the core thesis.** The classifier outputs `[TO FILL]`. You write it:
+   For each atom type below, extract what is actually present — skip types with nothing real to extract. Do not invent atoms that are not in the source.
+
+   **Insights** — non-obvious observations that have a practical implication for inclusive design, AI, or product work. Must connect to at least one of Jamaal's 5 content pillars. Write: the insight in one sentence + the business cost or benefit it implies.
+
+   **Objections** — beliefs Jamaal's audience currently holds that this content directly challenges. Think: what would a skeptical product leader or designer say to dismiss this? Write: the objection as the audience would actually say it + what the content says back.
+
+   **Quotes** — lines from the source worth preserving verbatim. Memorable, specific, attributable. Not summaries — actual language worth keeping.
+
+   **Patterns** — recurring observations across the source material. Only relevant if the input is multi-source (transcript, set of notes, research dump). Skip for single ideas.
+
+   **Questions** — things Jamaal's audience is actively asking that this content answers. Write in the audience's own words, not academic framing.
+
+   For each atom, also note:
+   - Which content pillar it maps to (one of the 5)
+   - The best format to express it: `linkedin_post` | `carousel` | `video_script` | `newsletter`
+
+   Write atoms to: `outputs/[pillar-slug]/[YYYY-MM-DD]-atoms-[slug].md` before proceeding to the brief.
+
+4. **Run the content-brief skill.** Feed the sharpest atoms — not the raw input — into the brief generator. Follow `.claude/skills/content-brief.md` exactly.
+   Call: `npx tsx scripts/cli.ts brief "<core insight or thesis from atoms>"`
+
+5. **Fill in the core thesis.** The classifier outputs `[TO FILL]`. You write it:
    - One sentence
    - Should make a product leader or designer stop scrolling
    - Cannot use banned phrases from `_context/voice-style-and-rules.md`
    - Connects inclusion to business value where possible
+   - Pull from the sharpest insight atom if one exists — do not write a thesis that ignores the atoms
 
-5. **Recommend an angle.** Beyond the brief, suggest:
+6. **Recommend an angle.** Beyond the brief, suggest:
    - The single sharpest angle for a LinkedIn post (what is the most uncomfortable truth here?)
    - Which gap, failure, or cost is most likely to resonate with the target audience
    - Whether this is better as a hot take, a framework explainer, or a data-driven argument
+   - If a strong objection atom exists, consider leading with that — objection-led content performs
 
-6. **Identify what else this could become.** List 2–3 derivative formats this source could produce.
+7. **Identify what else this could become.** List 2–3 derivative formats, drawn from the atom format recommendations where possible.
 
-7. **Present to Jamaal.** Show:
+8. **Present to Jamaal.** Show:
+   - The content atoms (brief list — not the full file)
    - The completed brief
-   - Your recommended angle
+   - Your recommended angle and why
    - Derivative format options
-   - Any claims needing citation
+   - Any claims needing citation (flag atoms with unverified stats)
 
-8. **Stop and wait.** Do not invoke content-agent until Jamaal confirms the angle.
+9. **Stop and wait.** Do not invoke content-agent until Jamaal confirms the angle.
    Ask: *"Does this direction work? Any shifts before I hand to content-agent?"*
 
 ## What you do NOT do
