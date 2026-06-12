@@ -20,8 +20,9 @@ growth-agent       → maps CTA, calendar slot, CRM segment, repurpose options
   ↓
 governance-agent   → final hard check, sets status: reviewed
   ↓
-design-agent       → Canva MCP: produces finished carousel slides from outline (parallel)
-video-agent        → HeyGen MCP: produces avatar video from script       (parallel)
+design-agent       → Canva MCP: produces finished carousel slides from outline         (parallel)
+video-agent        → ElevenLabs MCP: voice audio → HeyGen MCP: lip-synced avatar video (parallel)
+audio-agent        → ElevenLabs MCP: standalone audio clip for LinkedIn / podcast       (parallel)
   ↓
 delivery-agent     → packages all outputs, fires n8n webhook to Jamaal's inbox
   ↓
@@ -38,7 +39,7 @@ n8n publish workflow → posts to LinkedIn on Jamaal's explicit approval
 4. **If inclusion review returns `block`, stop the pipeline. Do not continue to growth-agent.**
 5. **Flag claims needing citation. Do not invent statistics.**
 6. **Write outputs to `/outputs/[channel]/` with filename format: `YYYY-MM-DD-[slug].md`**
-7. **design-agent and video-agent never run if inclusion review returned `block`.**
+7. **design-agent, video-agent, and audio-agent never run if inclusion review returned `block`.**
 8. **delivery-agent never fires the n8n webhook without a governance manifest at status `reviewed`.**
 9. **video-agent never disables captions. Ever.**
 10. **design-agent never rewrites copy. The words from content-agent are final.**

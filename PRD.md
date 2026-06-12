@@ -94,7 +94,8 @@ n8n publish-workflow → posts to LinkedIn, updates Notion to Published
 | `growth-agent` | Growth metadata | CTA, calendar slot, CRM segment, repurpose map |
 | `governance-agent` | Pipeline verification | Status: reviewed, governance manifest |
 | `design-agent` | Visual production | Finished Canva carousel slides |
-| `video-agent` | Video production | HeyGen avatar video with captions |
+| `video-agent` | Video production | ElevenLabs voice audio → HeyGen avatar video with captions |
+| `audio-agent` | Audio production | Standalone ElevenLabs audio clip for LinkedIn / podcast |
 | `delivery-agent` | Delivery | Packaged approval bundle, n8n webhook |
 
 ### Content Atom Extraction (strategy-agent)
@@ -119,7 +120,8 @@ Each atom is tagged with a content pillar and recommended format. The brief draw
 | **n8n Cloud** | Workflow orchestration | 2 importable workflows: produce + publish |
 | **Notion** | Idea intake + status tracking | ITC Content Ideas database |
 | **Canva MCP** | Carousel visual production | `design-agent` via Canva MCP tools |
-| **HeyGen MCP** | Avatar video production | `video-agent` via HeyGen MCP tools |
+| **ElevenLabs MCP** | Voice synthesis | `video-agent` (voice audio) + `audio-agent` (standalone clip) |
+| **HeyGen MCP** | Avatar lip-sync | `video-agent` — lip-syncs avatar to ElevenLabs audio |
 | **Gmail** | Approval email delivery | n8n Gmail OAuth2 node |
 | **LinkedIn** | Final publish | n8n LinkedIn OAuth2 node |
 | **GitHub** | Source control | `JamaalDavis/-inclusive-tech-club-growth-content-os` |
@@ -133,7 +135,8 @@ Each atom is tagged with a content pillar and recommended format. The brief draw
 | LinkedIn post | `linkedin-post-generator.ts` | Short, medium, carousel intro |
 | Newsletter | `newsletter-generator.ts` | Full section structure |
 | Carousel | `carousel-generator.ts` + `design-agent` | 5, 7, or 10 slides with alt text + Canva slides |
-| Video script | `video-script-generator.ts` + `video-agent` | 30, 60, or 90 seconds + HeyGen avatar video |
+| Video script | `video-script-generator.ts` + `video-agent` | 30, 60, or 90 seconds + ElevenLabs voice + HeyGen avatar video |
+| Audio clip | `audio-agent` | Standalone MP3 from same script — LinkedIn audio post / podcast |
 | Lead magnet | Template | Structured long-form |
 | Nurture email | Template | CRM sequence format |
 

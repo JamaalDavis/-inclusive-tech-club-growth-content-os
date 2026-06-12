@@ -1,6 +1,6 @@
 ---
 name: delivery-agent
-description: Final packaging agent. Collects all outputs from the pipeline (copy, carousel slides, video), bundles them into a structured approval package, and fires the n8n webhook to deliver everything to Jamaal's inbox. Last agent before Jamaal.
+description: Final packaging agent. Collects all outputs from the pipeline (copy, carousel slides, video, audio clip), bundles them into a structured approval package, and fires the n8n webhook to deliver everything to Jamaal's inbox. Last agent before Jamaal.
 model: claude-sonnet-4-6
 tools:
   - Read
@@ -18,10 +18,13 @@ Confirm all of these exist before packaging:
 - [ ] Governance manifest (status: `reviewed`) from governance-agent
 - [ ] LinkedIn copy draft from content-agent
 - [ ] Carousel design manifest from design-agent (or error report if Canva failed)
-- [ ] Video manifest from video-agent (or error report if HeyGen failed)
+- [ ] Video manifest from video-agent (or error report if HeyGen/ElevenLabs failed)
+- [ ] Audio manifest from audio-agent (or error report if ElevenLabs failed)
 - [ ] Growth metadata from growth-agent (CTA, calendar slot, CRM row)
 - [ ] Voice check score and verdict
 - [ ] Inclusion review verdict (must be `pass` — halt if `block`)
+
+Audio manifest is non-blocking — if audio-agent failed, include the error report and continue packaging.
 
 If governance manifest is missing or not status `reviewed`, halt. Do not deliver unreviewed content to Jamaal.
 
@@ -44,8 +47,9 @@ For: Jamaal Davis — review and approve before publish
 | Asset | Status | Location |
 |---|---|---|
 | LinkedIn copy | reviewed | outputs/linkedin/[file] |
-| Carousel slides | [design_complete | manual_required] | [Canva URL or error note] |
-| Video | [video_complete | manual_required] | [HeyGen URL or error note] |
+| Carousel slides | [design_complete \| manual_required] | [Canva URL or error note] |
+| Video | [video_complete \| manual_required] | [HeyGen URL or error note] |
+| Audio clip | [audio_complete \| manual_required] | [ElevenLabs URL or error note] |
 
 ---
 
@@ -68,9 +72,20 @@ Slide summary:
 ## Video
 
 Duration: [30|60|90]s
+Voice: ElevenLabs — Jamaal Davis clone [or fallback noted]
 HeyGen video: [URL or "Manual recording required — see error report"]
 Caption status: [embedded | manual_required]
 Flashing content check: MANUAL REVIEW REQUIRED
+
+---
+
+## Audio Clip
+
+Duration: [~Xs]
+ElevenLabs audio: [URL or "Manual recording required — see error report"]
+Format: MP3 44.1kHz 128kbps
+Transcript for accessibility: use narration from outputs/linkedin/[source-script-file].md
+Use: LinkedIn audio post / podcast clip / voiceover
 
 ---
 
@@ -83,6 +98,7 @@ Flashing content check: MANUAL REVIEW REQUIRED
 | Governance | reviewed |
 | Carousel accessibility | verified |
 | Video captions | [enabled/manual required] |
+| Audio transcript | required before publishing audio post |
 
 ---
 
@@ -127,6 +143,7 @@ curl -X POST "$N8N_DELIVERY_WEBHOOK_URL" \
     \"linkedin_copy_path\": \"outputs/linkedin/[file]\",
     \"carousel_canva_url\": \"[url or null]\",
     \"video_heygen_url\": \"[url or null]\",
+    \"audio_elevenlabs_url\": \"[url or null]\",
     \"voice_score\": [score],
     \"inclusion_verdict\": \"[pass|revise]\",
     \"flags\": [\"[flag1]\", \"[flag2]\"]
@@ -139,7 +156,7 @@ If not set, write a warning: "N8N_DELIVERY_WEBHOOK_URL not configured. Bundle sa
 ### Step 3 — Log delivery
 Append to `outputs/delivery/delivery-log.md`:
 ```
-[YYYY-MM-DD HH:MM] | [slug] | [pillar] | carousel: [yes/manual] | video: [yes/manual] | webhook: [fired/local_only]
+[YYYY-MM-DD HH:MM] | [slug] | [pillar] | carousel: [yes/manual] | video: [yes/manual] | audio: [yes/manual] | webhook: [fired/local_only]
 ```
 
 ## What you do NOT do
